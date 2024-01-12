@@ -11,6 +11,45 @@ enum Operation {
   EXIT
 };
 
+// Operations
+// 1.
+void addNewStudent(pqxx::work &database) {
+  size_t age, course;
+  std::string name;
+
+  std::cout << "Enter name : ";
+  std::cin >> name;
+
+  std::cout << "Enter course : ";
+  std::cin >> course;
+
+  std::cout << "Enter age : ";
+  std::cin >> age;
+
+  std::string sql =
+      "INSERT INTO students(name, course, age) VALUES ($1, $2, $3)";
+  database.exec_params(sql, name, course, age);
+
+  std::cout << "Student Add succesfully\n";
+}
+// 2.
+void displayAllStudents(pqxx::work &database) {
+  try {
+    std::string sql = "SELECT name, course, age, id FROM students";
+    pqxx::result result = database.exec(sql);
+
+    std::cout << "Name Course Age   ID\n";
+
+    for (const auto &row : result) {
+      std::cout << row.at("name").c_str() << " " << row.at("course").as<int>()
+                << " " << row.at("age").as<int>() << "  "
+                << row.at("id").as<int>() << '\n';
+    }
+  } catch (const std::exception &e) {
+    std::cerr << "Error executing SQL query: " << e.what() << std::endl;
+  }
+}
+// 3.
 pqxx::result search(pqxx::work &database) {
   int operation;
   std::cout << "Find by: " << '\n';
@@ -53,27 +92,7 @@ void searchStudent(pqxx::work &database) {
   std::cout << "Age: " << studentInfo[0]["age"].as<size_t>() << '\n';
   std::cout << "------------------------------------\n";
 }
-
-void addNewStudent(pqxx::work &database) {
-  size_t age, course;
-  std::string name;
-
-  std::cout << "Enter name : ";
-  std::cin >> name;
-
-  std::cout << "Enter course : ";
-  std::cin >> course;
-
-  std::cout << "Enter age : ";
-  std::cin >> age;
-
-  std::string sql =
-      "INSERT INTO students(name, course, age) VALUES ($1, $2, $3)";
-  database.exec_params(sql, name, course, age);
-
-  std::cout << "Student Add succesfully\n";
-}
-
+// 4.
 void updateStudent(pqxx::work &database) {
   auto studentInfo = search(database);
 
@@ -155,7 +174,7 @@ void updateStudent(pqxx::work &database) {
     std::cerr << "Error executing SQL query: " << e.what() << std::endl;
   }
 }
-
+// 5.
 void deleteStudent(pqxx::work &database) {
   int operation = 0;
   std::cout << "------------------------" << '\n';
@@ -206,23 +225,7 @@ void printMenu() {
   cout << "Enter your choice : ";
 }
 
-void displayAllStudents(pqxx::work &database) {
-  try {
-    std::string sql = "SELECT name, course, age, id FROM students";
-    pqxx::result result = database.exec(sql);
-
-    std::cout << "Name Course Age   ID\n";
-
-    for (const auto &row : result) {
-      std::cout << row.at("name").c_str() << " " << row.at("course").as<int>()
-                << " " << row.at("age").as<int>() << "  "
-                << row.at("id").as<int>() << '\n';
-    }
-  } catch (const std::exception &e) {
-    std::cerr << "Error executing SQL query: " << e.what() << std::endl;
-  }
-}
-
+// Main function
 int main() {
   using namespace std;
 
