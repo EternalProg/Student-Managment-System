@@ -1,8 +1,6 @@
-#include "student.h"
-
-#include <vector>
-
-size_t Student::count = 1;
+#include <iostream>
+#include <pqxx/pqxx>
+#include <string>
 
 enum Operation {
   ADD_STUDENT = 1,
@@ -13,75 +11,50 @@ enum Operation {
   EXIT
 };
 
-Student::Student() : _name("Unknown"), _course(0), _age(0), _id(count) {
-  ++count;
-}
-
-Student::Student(std::string name, size_t course, size_t age, size_t id)
-    : _name(name), _course(course), _age(age), _id(id) {
-  ++count;
-}
-
-Student::~Student() { --count; }
-
-std::string Student::getName() const { return _name; }
-
-size_t Student::getCourse() const { return _course; }
-
-size_t Student::getAge() const { return _age; }
-
-size_t Student::getID() const { return _id; }
-
-void Student::setAge(size_t age) { _age = age; }
-
-void Student::setCourse(size_t course) { _course = course; }
-
-void Student::setName(std::string name) { _name = name; }
-
-Student *search(std::vector<Student> &database) {
+pqxx::result search(pqxx::work &database) {
   int operation;
   std::cout << "Find by: " << '\n';
   std::cout << "1. name" << '\n';
   std::cout << "2. id" << '\n';
   std::cout << "Enter choice: ";
   std::cin >> operation;
+
+  std::string sql;
+
   switch (operation) {
     case 1: {
       std::string name;
       std::cout << "Enter Name: ";
       std::cin >> name;
-
-      for (auto &it : database)
-        if (it.getName() == name) return &it;
+      sql = "SELECT * FROM students WHERE name = '" + name + "'";
       break;
     }
     case 2: {
-      size_t id;
+      std::string id;
       std::cout << "Enter ID: ";
       std::cin >> id;
-
-      for (auto &it : database)
-        if (it.getID() == id) return &it;
+      sql = "SELECT * FROM students WHERE id = " + id;
       break;
     }
   }
-  return nullptr;
+
+  return database.exec(sql);
 }
 
-void searchStudent(std::vector<Student> &database) {
-  auto student = search(database);
-  if (student == nullptr) {
+void searchStudent(pqxx::work &database) {
+  auto studentInfo = search(database);
+  if (studentInfo.empty()) {
     std::cout << "Student doesn't exist" << '\n';
     return;
   }
   std::cout << "------------------------------------" << '\n';
-  std::cout << "Name: " << student->getName() << '\n';
-  std::cout << "Course: " << student->getCourse() << '\n';
-  std::cout << "Age: " << student->getAge() << '\n';
-  std::cout << "------------------------------------" << '\n';
+  std::cout << "Name: " << studentInfo[0]["name"].c_str() << '\n';
+  std::cout << "Course: " << studentInfo[0]["course"].as<size_t>() << '\n';
+  std::cout << "Age: " << studentInfo[0]["age"].as<size_t>() << '\n';
+  std::cout << "------------------------------------\n";
 }
 
-void addNewStudent(std::vector<Student> &database) {
+void addNewStudent(pqxx::work &database) {
   size_t age, course;
   std::string name;
 
@@ -94,37 +67,31 @@ void addNewStudent(std::vector<Student> &database) {
   std::cout << "Enter age : ";
   std::cin >> age;
 
-  database.push_back(Student(name, course, age));
-  std::cout << "Student Add succesfully" << std::endl;
+  std::string sql =
+      "INSERT INTO students(name, course, age) VALUES ($1, $2, $3)";
+  database.exec_params(sql, name, course, age);
+
+  std::cout << "Student Add succesfully\n";
 }
 
-void displayAllStudents(const std::vector<Student> &database) {
-  std::cout << "Name"
-            << "  "
-            << "Course"
-            << "   "
-            << "Age"
-            << "  "
-            << "Id" << '\n';
-  for (auto it : database) {
-    std::cout << it.getName() << " " << it.getCourse() << " " << it.getAge()
-              << " " << it.getID() << '\n';
-  }
-}
+void updateStudent(pqxx::work &database) {
+  auto studentInfo = search(database);
 
-void updateStudent(std::vector<Student> &database) {
-  auto student = search(database);
-
-  if (student == nullptr) {
+  if (studentInfo.empty()) {
     std::cout << "Student doesn't exist" << '\n';
     return;
   }
 
-  std::cout << "------------------------------------" << '\n';
-  std::cout << "Name: " << student->getName() << '\n';
-  std::cout << "Course: " << student->getCourse() << '\n';
-  std::cout << "Age: " << student->getAge() << '\n';
-  std::cout << "------------------------------------" << '\n';
+  std::string name = studentInfo[0]["name"].c_str();
+  std::string course = studentInfo[0]["course"].c_str();
+  std::string age = studentInfo[0]["age"].c_str();
+  std::string id = studentInfo[0]["id"].c_str();
+
+  std::cout << "------------------------------------\n";
+  std::cout << "Name: " << name << '\n';
+  std::cout << "Course: " << course << '\n';
+  std::cout << "Age: " << age << '\n';
+  std::cout << "------------------------------------\n";
 
   int choice = 0;
   std::cout << "What do you want to change: " << '\n';
@@ -136,108 +103,171 @@ void updateStudent(std::vector<Student> &database) {
   std::cout << "Enter choice: ";
   std::cin >> choice;
 
+  std::string sql;
+
   switch (choice) {
     case 1: {
-      std::string name;
+      std::string newName;
       std::cout << "Print new Name: ";
-      std::cin >> name;
-      student->setName(name);
-      std::cout << "Name changed succesfully" << '\n';
+      std::cin >> newName;
+
+      sql = "UPDATE students SET name = '" + newName + "' WHERE id = " + id;
       break;
     }
     case 2: {
-      size_t course;
+      std::string newCourse;
       std::cout << "Print new Course: ";
-      std::cin >> course;
-      student->setCourse(course);
-      std::cout << "Course changed succesfully" << '\n';
+      std::cin >> newCourse;
+
+      sql = "UPDATE students SET course = " + newCourse + " WHERE id = " + id;
       break;
     }
     case 3: {
-      size_t age;
+      std::string newAge;
       std::cout << "Print new Age: ";
-      std::cin >> age;
-      student->setAge(age);
+      std::cin >> newAge;
+
+      sql = "UPDATE students SET age = " + newAge + " WHERE id = " + id;
       break;
     }
     case 4: {
-      std::string name;
-      size_t course, age;
+      std::string newName, newCourse, newAge;
 
       std::cout << "Print new Name: ";
-      std::cin >> name;
+      std::cin >> newName;
 
       std::cout << "Print new Course: ";
-      std::cin >> course;
+      std::cin >> newCourse;
 
       std::cout << "Print new Age: ";
-      std::cin >> age;
+      std::cin >> newAge;
 
-      student->setName(name);
-      student->setCourse(course);
-      student->setAge(age);
-
-      std::cout << "All information changed succesfully" << '\n';
+      sql = "UPDATE students SET name = '" + newName +
+            "', course = " + newCourse + ", age = " + newAge +
+            " WHERE id = " + id;
       break;
     }
   }
+  try {
+    database.exec(sql);
+    std::cout << "Student information updated successfully" << '\n';
+  } catch (const std::exception &e) {
+    std::cerr << "Error executing SQL query: " << e.what() << std::endl;
+  }
 }
 
-void deleteStudent(std::vector<Student> &database) {
-  auto student = search(database);
+void deleteStudent(pqxx::work &database) {
+  int operation = 0;
+  std::cout << "------------------------" << '\n';
+  std::cout << " 1. Delete by name\n";
+  std::cout << " 2. Delete by id\n";
+  std::cout << "Enter your choice: ";
+  std::cin >> operation;
 
-  if (student == nullptr) {
-    std::cout << "Student doesn't exist" << '\n';
-    return;
+  std::string sql;
+  std::string deletedStudentInfo;
+
+  switch (operation) {
+    case 1: {
+      std::string name;
+      std::cout << "Enter name: ";
+      std::cin >> name;
+      sql = "DELETE FROM students WHERE name = '" + name + "'";
+      deletedStudentInfo = "Student with Name " + name;
+      break;
+    }
+    case 2: {
+      std::string id;
+      std::cout << "Enter id: ";
+      std::cin >> id;
+      sql = "DELETE FROM students WHERE id = " + id;
+      deletedStudentInfo = "Student with id " + id;
+      break;
+    }
   }
-  std::cout << "Student " << student->getName() << " #" << student->getID()
-            << " succesfully deleted" << '\n';
-  database.erase(static_cast<std::vector<Student>::iterator>(student));
+
+  try {
+    database.exec(sql);
+
+    std::cout << deletedStudentInfo << " deleted successfully.\n";
+  } catch (const std::exception &e) {
+    std::cerr << "Error executing SQL query: " << e.what() << std::endl;
+  }
 }
 
 void printMenu() {
   using std::cout;
-  cout << " 1. Add New Student" << '\n';
-  cout << " 2. Display All Students" << '\n';
-  cout << " 3. Search Student" << '\n';
-  cout << " 4. Update Student" << '\n';
-  cout << " 5. Delete Student" << '\n';
-  cout << " 6. Exit" << '\n';
+  cout << " 1. Add New Student\n";
+  cout << " 2. Display All Students\n";
+  cout << " 3. Search Student\n";
+  cout << " 4. Update Student\n";
+  cout << " 5. Delete Student\n";
+  cout << " 6. Exit\n";
   cout << "Enter your choice : ";
+}
+
+void displayAllStudents(pqxx::work &database) {
+  try {
+    std::string sql = "SELECT name, course, age, id FROM students";
+    pqxx::result result = database.exec(sql);
+
+    std::cout << "Name Course Age   ID\n";
+
+    for (const auto &row : result) {
+      std::cout << row.at("name").c_str() << " " << row.at("course").as<int>()
+                << " " << row.at("age").as<int>() << "  "
+                << row.at("id").as<int>() << '\n';
+    }
+  } catch (const std::exception &e) {
+    std::cerr << "Error executing SQL query: " << e.what() << std::endl;
+  }
 }
 
 int main() {
   using namespace std;
-  vector<Student> students;
-  students.push_back(Student("Ivan", 1, 17));
 
-  int operation = 0;
-  while (operation != Operation::EXIT) {
-    printMenu();
-    cin >> operation;
+  try {
+    pqxx::connection conn(
+        "user=postgres password=admin123 host=localhost port=5432 dbname=mydb "
+        "target_session_attrs=read-write");
+    if (conn.is_open()) {
+      std::cout << "Connected to database successfully: " << conn.dbname()
+                << std::endl;
+      pqxx::work database(conn);
 
-    switch (operation) {
-      case Operation::ADD_STUDENT:
-        addNewStudent(students);
-        break;
-      case Operation::DISPLAY_STUDENTS:
-        displayAllStudents(students);
-        break;
-      case Operation::SEARCH_STUDENT:
-        searchStudent(students);
-        break;
-      case Operation::UPDATE_STUDENT:
-        updateStudent(students);
-        break;
-      case Operation::DELETE_STUDENT:
-        deleteStudent(students);
-        break;
-      case Operation::EXIT:
-        std::cout << "See you next time!" << '\n';
-        break;
-      default:
-        cout << "Invalid operation" << '\n';
+      int operation = 0;
+      while (operation != Operation::EXIT) {
+        printMenu();
+        cin >> operation;
+
+        switch (operation) {
+          case Operation::ADD_STUDENT:
+            addNewStudent(database);
+            break;
+          case Operation::DISPLAY_STUDENTS:
+            displayAllStudents(database);
+            break;
+          case Operation::SEARCH_STUDENT:
+            searchStudent(database);
+            break;
+          case Operation::UPDATE_STUDENT:
+            updateStudent(database);
+            break;
+          case Operation::DELETE_STUDENT:
+            deleteStudent(database);
+            break;
+          case Operation::EXIT:
+            std::cout << "See you next time!" << '\n';
+            break;
+          default:
+            cout << "Invalid operation" << '\n';
+        }
+      }
+      database.commit();
     }
+  } catch (const std::exception &e) {
+    std::cerr << e.what() << std::endl;
+    return 1;
   }
 
   return 0;
